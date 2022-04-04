@@ -57,7 +57,7 @@ RUN apt update && apt install -y \
 RUN apt update && apt install -y \
   perl && \
   mkdir /tmp/install-tl-unx && \
-  curl -L http://ftp.yz.yamagata-u.ac.jp/pub/CTAN/systems/texlive/Source/install-tl-unx.tar.gz | \
+  curl -L https://ftp.jaist.ac.jp/pub/CTAN/systems/texlive/tlnet/install-tl-unx.tar.gz | \
   tar -xz -C /tmp/install-tl-unx --strip-components=1 && \
   printf "%s\n" \
   "selected_scheme scheme-basic" \
