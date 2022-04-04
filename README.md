@@ -1,1 +1,1 @@
-# -jupyter-pandoc-latex
+# jupyter-pandoc-latex
