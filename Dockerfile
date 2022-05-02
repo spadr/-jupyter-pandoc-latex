@@ -1,28 +1,47 @@
-FROM ubuntu:22.04
+FROM node:18-slim AS node-installer
+RUN npm install -global textlint textlint-rule-preset-ja-technical-writing textlint-filter-rule-comments textlint-filter-rule-whitelist
 
-ENV NODE_VERSION 16
 
-ENV HOME /home/jupytex
-
+FROM ubuntu:22.04 AS python-installer
 # setting user
 ARG UID=1000
 RUN groupadd jupytex && useradd -m -u ${UID} jupytex -g jupytex
-#USER ${UID}
-
 # set timezone
 RUN apt update && apt upgrade -y && apt install -y tzdata
 ENV TZ=Asia/Tokyo
-
 # install general app
 RUN apt update && apt install -y \
-    make \
-    curl \
     wget \
     unzip \
-    tar \
-    nano \
-    git
+    tar
+RUN apt update && apt install -y python3-pip
+USER ${UID}
+RUN pip3 install --upgrade pip setuptools && \
+    pip3 install --no-cache-dir \
+    poetry \
+    pygments \
+    black \
+    flake8 \
+    jupyterlab \
+    jupyterlab_code_formatter \
+    jupyterlab-git \
+    lckr-jupyterlab-variableinspector \
+    jupyterlab_widgets \
+    ipywidgets \
+    import-ipynb \
+    jupyter-contrib-nbextensions \
+    jupyter-nbextensions-configurator
 
+
+FROM ubuntu:22.04 as latex-installer
+# set timezone
+RUN apt update && apt upgrade -y && apt install -y tzdata
+ENV TZ=Asia/Tokyo
+# install general app
+RUN apt update && apt install -y \
+    wget \
+    unzip \
+    tar
 # install LaTeX
 ENV PATH /usr/local/bin/texlive:$PATH
 WORKDIR /install-tl-unx
@@ -38,8 +57,6 @@ RUN tlmgr install \
     collection-langjapanese \
     collection-latexextra \
     latexmk
-
-# add LaTeX modules
 ARG TEXMFLOCAL=/usr/local/texlive/texmf-local/tex/latex
 WORKDIR /workspace
 RUN wget http://captain.kanpaku.jp/LaTeX/jlisting.zip \
@@ -58,45 +75,38 @@ RUN wget http://mirrors.ctan.org/macros/latex/contrib/algorithmicx.zip \
     && cp algorithmicx/*.sty ${TEXMFLOCAL}/algorithmicx
 
 
-# add Python modules
-WORKDIR $HOME
-RUN apt update && apt install -y python3-pip
-RUN pip3 install --upgrade pip setuptools && \
-    pip3 install --no-cache-dir \
-    pygments \
-    black \
-    flake8 \
-    jupyterlab \
-    jupyterlab_code_formatter \
-    jupyterlab-git \
-    lckr-jupyterlab-variableinspector \
-    jupyterlab_widgets \
-    ipywidgets \
-    import-ipynb \
-    jupyter-contrib-nbextensions \
-    jupyter-nbextensions-configurator && \
-    jupyter labextension install \
+FROM ubuntu:22.04 as ubuntu-runner
+# setting user
+ARG UID=1000
+RUN groupadd jupytex && useradd -m -u ${UID} jupytex -g jupytex
+# set timezone
+RUN apt update && apt upgrade -y && apt install -y tzdata
+ENV TZ=Asia/Tokyo
+# install general app
+RUN apt update && apt install -y \
+    nano \
+    git
+COPY --from=latex-installer --chown=jupytex:jupytex /usr/local/texlive /usr/local/texlive
+RUN ln -sf /usr/local/texlive/*/bin/* /usr/local/bin/texlive
+RUN apt update && apt install -y python3-pip python-is-python3 python3-distutils
+RUN mkdir /home/jupytex/.local
+COPY --from=python-installer --chown=jupytex:jupytex /home/jupytex/.local /home/jupytex/.local
+COPY --from=node-installer --chown=jupytex:jupytex /usr/local/bin/ /usr/local/bin/
+COPY --from=node-installer --chown=jupytex:jupytex /usr/local/lib/node_modules /usr/local/lib/node_modules
+ENV HOME /home/jupytex
+ENV PATH $HOME/.local/bin:$PATH
+RUN jupyter labextension install \
     @ryantam626/jupyterlab_code_formatter \
     @jupyterlab/toc && \
     jupyter serverextension enable --py jupyterlab_code_formatter && \
     jupyter contrib nbextension install && \
     jupyter nbextensions_configurator enable
-
-# install Poetry
-RUN pip3 install --no-cache-dir  poetry
-RUN apt update && apt install -y  python-is-python3 python3-distutils
-RUN poetry config virtualenvs.in-project true
-RUN poetry new project-x
-WORKDIR $HOME/project-x
-RUN poetry add -D ipykernel
-RUN poetry run ipython kernel install --user --name=project-x --display-name=project-x
-
 # install Pandoc
 RUN apt update && apt install -y pandoc
-
-# install Node
-RUN curl -sL https://deb.nodesource.com/setup_$NODE_VERSION.x | bash -
-RUN apt install -y nodejs
-
-# add textlint
-RUN npm install -global textlint textlint-rule-preset-ja-technical-writing textlint-filter-rule-comments textlint-filter-rule-whitelist
+# install Poetry
+COPY --chown=jupytex:jupytex ./project-x $HOME
+USER ${UID}
+WORKDIR $HOME/project-x
+RUN poetry config virtualenvs.in-project true
+RUN poetry add -D ipykernel
+RUN poetry run ipython kernel install --user --name=project-x --display-name=project-x
