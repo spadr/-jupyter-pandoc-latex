@@ -18,7 +18,6 @@ RUN apt update && apt install -y python3-pip
 USER ${UID}
 RUN pip3 install --upgrade pip setuptools && \
     pip3 install --no-cache-dir \
-    poetry \
     pygments \
     black \
     flake8 \
@@ -27,6 +26,7 @@ RUN pip3 install --upgrade pip setuptools && \
     jupyterlab-git \
     lckr-jupyterlab-variableinspector \
     jupyterlab_widgets \
+    ipykernel \
     ipywidgets \
     import-ipynb \
     jupyter-contrib-nbextensions \
@@ -103,10 +103,8 @@ RUN jupyter labextension install \
     jupyter nbextensions_configurator enable
 # install Pandoc
 RUN apt update && apt install -y pandoc
-# install Poetry
-COPY --chown=jupytex:jupytex ./project-x $HOME
+
+WORKDIR $HOME
 USER ${UID}
-WORKDIR $HOME/project-x
-RUN poetry config virtualenvs.in-project true
-RUN poetry add -D ipykernel
-RUN poetry run ipython kernel install --user --name=project-x --display-name=project-x
+RUN pip3 install --upgrade pip setuptools
+RUN pip3 freeze > requirements.txt
