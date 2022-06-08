@@ -75,6 +75,28 @@ RUN wget http://mirrors.ctan.org/macros/latex/contrib/algorithmicx.zip \
     && cp algorithmicx/*.sty ${TEXMFLOCAL}/algorithmicx
 
 
+FROM ubuntu:22.04 as jupyter-installer
+# setting user
+ARG UID=1000
+RUN groupadd jupytex && useradd -m -u ${UID} jupytex -g jupytex
+# set timezone
+RUN apt update && apt upgrade -y && apt install -y tzdata
+ENV TZ=Asia/Tokyo
+ENV HOME /home/jupytex
+ENV PATH $HOME/.local/bin:$PATH
+RUN apt update && apt install -y python3-pip python-is-python3 python3-distutils
+RUN mkdir /home/jupytex/.local
+COPY --from=python-installer --chown=jupytex:jupytex /home/jupytex/.local /home/jupytex/.local
+COPY --from=node-installer --chown=jupytex:jupytex /usr/local/bin/ /usr/local/bin/
+COPY --from=node-installer --chown=jupytex:jupytex /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN jupyter labextension install \
+    @ryantam626/jupyterlab_code_formatter \
+    @jupyterlab/toc && \
+    jupyter serverextension enable --py jupyterlab_code_formatter && \
+    jupyter contrib nbextension install && \
+    jupyter nbextensions_configurator enable
+#RUN jupyter-lab
+
 FROM ubuntu:22.04 as ubuntu-runner
 # setting user
 ARG UID=1000
@@ -93,19 +115,18 @@ RUN mkdir /home/jupytex/.local
 COPY --from=python-installer --chown=jupytex:jupytex /home/jupytex/.local /home/jupytex/.local
 COPY --from=node-installer --chown=jupytex:jupytex /usr/local/bin/ /usr/local/bin/
 COPY --from=node-installer --chown=jupytex:jupytex /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN mkdir -m 777 -p /home/jupytex/.jupyter
+COPY --from=jupyter-installer --chown=jupytex:jupytex /home/jupytex/.jupyter /home/jupytex/.jupyter
 ENV HOME /home/jupytex
 ENV PATH $HOME/.local/bin:$PATH
-RUN jupyter labextension install \
-    @ryantam626/jupyterlab_code_formatter \
-    @jupyterlab/toc && \
-    jupyter serverextension enable --py jupyterlab_code_formatter && \
-    jupyter contrib nbextension install && \
-    jupyter nbextensions_configurator enable
+
 # install Pandoc
 RUN apt update && apt install -y pandoc
 
 # make workspace
 USER ${UID}
+RUN touch /home/jupytex/.jupyter/migrated
+RUN chown jupytex /home/jupytex/.jupyter/migrated
 RUN mkdir -m 777 -p $HOME/workspace
 RUN mkdir -m 777 -p $HOME/workspace/share
 WORKDIR $HOME/workspace
