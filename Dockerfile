@@ -104,7 +104,12 @@ RUN jupyter labextension install \
 # install Pandoc
 RUN apt update && apt install -y pandoc
 
-WORKDIR $HOME
+# make workspace
 USER ${UID}
+RUN mkdir -m 777 -p $HOME/workspace
+RUN mkdir -m 777 -p $HOME/workspace/share
+WORKDIR $HOME/workspace
 RUN pip3 install --upgrade pip setuptools
 RUN pip3 freeze > requirements.txt
+RUN git config --global --add safe.directory /home/jupytex/workspace
+RUN git config --global init.defaultBranch main
